@@ -1,39 +1,61 @@
 from minio import Minio
-import urllib.request
+import urllib.request as request
 import pandas as pd
+from io import BytesIO
 import sys
+from dateutil.relativedelta import relativedelta
+import datetime
+import os
 
 def main():
-    grab_data()
+    write_data_minio()
     
+path_storage = './data/raw'
+
+default_url = "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_"
+ext = ".parquet"
+    
+months = [
+    "2023-11",
+    "2023-12"
+]
 
 def grab_data() -> None:
-    """Grab the data from New York Yellow Taxi
-
-    This method download x files of the New York Yellow Taxi. 
+    for i, month in enumerate(months):
+        url = f'{default_url}{month}{ext}'
+        response = request.urlopen(url)
+        df = pd.read_parquet(BytesIO(response.read()))
+        df.to_parquet(f'{path_storage}/data_{month}.parquet')
+        print(df.head())
+        
+def grab_data_minus_x(month_ago) -> None:
+    date_x_months_ago = datetime.datetime.now() - relativedelta(months=month_ago)
+    month = date_x_months_ago.strftime("%Y-%m")
+    url = f'{default_url}{month}{ext}'
+    response = request.urlopen(url)
+    df = pd.read_parquet(BytesIO(response.read()))
+    df.to_parquet(f'{path_storage}/data_{month}.parquet')
+    print(df.head())
     
-    Files need to be saved into "../../data/raw" folder
-    This methods takes no arguments and returns nothing.
-    """
-
-
 def write_data_minio():
-    """
-    This method put all Parquet files into Minio
-    Ne pas faire cette méthode pour le moment
-    """
     client = Minio(
         "localhost:9000",
         secure=False,
         access_key="minio",
         secret_key="minio123"
     )
-    bucket: str = "NOM_DU_BUCKET_ICI"
+    bucket: str = "nycyellowtaxi"
     found = client.bucket_exists(bucket)
     if not found:
         client.make_bucket(bucket)
     else:
-        print("Bucket " + bucket + " existe déjà")
+        print("Bucket : " + bucket + ", already exists")
+        
+    for filename in os.listdir(path_storage):
+        if filename.endswith(ext):
+            filepath = os.path.join(path_storage, filename)
+            client.fput_object(bucket, filename, filepath)
+            print(f"Uploaded {filename} to bucket {bucket}")
 
 if __name__ == '__main__':
     sys.exit(main())
