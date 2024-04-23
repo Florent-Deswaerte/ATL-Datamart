@@ -26,6 +26,7 @@ def execute_sql_file(filename):
     with engine.connect() as connection:
         connection.execute(sql)
         connection.commit()
+        connection.close()
 
 def connect_and_execute_sql_file(db_config, file):
     global engine
