@@ -65,6 +65,7 @@ services:
     environment:
       POSTGRES_USERNAME: admin
       POSTGRES_PASSWORD: admin
+      POSTGRES_DB: nyc_warehouse
     networks:
       - spark_network
     volumes:

@@ -1,7 +1,9 @@
 import gc
 import os
 import sys
-
+from minio import Minio
+import pyarrow.parquet as pq
+import pyarrow as pa
 import pandas as pd
 from sqlalchemy import create_engine
 
@@ -60,26 +62,28 @@ def clean_column_name(dataframe: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
-    # folder_path: str = r'..\..\data\raw'
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    # Construct the relative path to the folder
-    folder_path = os.path.join(script_dir, '..', '..', 'data', 'raw')
+    client = Minio(
+        "localhost:9000",
+        secure=False,
+        access_key="minio",
+        secret_key="minio123"
+    )
+    bucket: str = "nycyellowtaxi"
 
-    parquet_files = [f for f in os.listdir(folder_path) if
-                     f.lower().endswith('.parquet') and os.path.isfile(os.path.join(folder_path, f))]
+    for obj in client.list_objects(bucket):
+        if obj.object_name.endswith('.parquet'):
+            data = client.get_object(bucket, obj.object_name)
+            data_bytes = data.read()
+            parquet_df: pd.DataFrame = pq.read_table(pa.BufferReader(data_bytes)).to_pandas()
 
-    for parquet_file in parquet_files:
-        parquet_df: pd.DataFrame = pd.read_parquet(os.path.join(folder_path, parquet_file), engine='pyarrow')
+            clean_column_name(parquet_df)
+            if not write_data_postgres(parquet_df):
+                del parquet_df
+                gc.collect()
+                return
 
-        clean_column_name(parquet_df)
-        if not write_data_postgres(parquet_df):
             del parquet_df
             gc.collect()
-            return
-
-        del parquet_df
-        gc.collect()
-
 
 if __name__ == '__main__':
     sys.exit(main())
